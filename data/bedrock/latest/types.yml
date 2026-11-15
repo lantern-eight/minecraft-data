@@ -515,6 +515,16 @@ Link:
 
 Links: Link[]varint
 
+PassengerOfBlockData:
+   block_position: BlockCoordinates
+   offset: vec3f
+   rotation: lf32
+   rotation_limit: lf32
+   emote_type: u8 =>
+      0: standing
+      1: riding
+      2: laying
+
 EntityAttributes: []varint
    name: string
    min: lf32
@@ -588,6 +598,9 @@ TransactionUseItem:
    # HotBarSlot is the hot bar slot that the player was holding while clicking the block. It should be used
    # to ensure that the hot bar slot and held item are correctly synchronised with the server.
    hotbar_slot: zigzag32
+   hand: u8 =>
+      0: main_hand
+      1: off_hand
    # HeldItem is the item that was held to interact with the block. The server should check if this item
    # is actually present in the HotBarSlot.
    held_item: ItemV4
@@ -620,9 +633,7 @@ TransactionActions: []varint
       3: creative
       100: craft_slot
       99999: craft
-   container_presence: bool
    window_id?: i8
-   flag_presence: bool
    flags?: varint
    slot: varint
    old_item: ItemV4
@@ -653,7 +664,7 @@ Transaction:
    # Old transaction system data
    legacy: TransactionLegacy
    # What type of transaction took place
-   transaction_type?: varint =>
+   transaction_type: varint =>
       # Sent for container UI operations depending on if ItemStackNetManager is enabled
       0: normal
       # Sent from server to client to reject a transaction
@@ -669,7 +680,7 @@ Transaction:
       # See ItemReleaseInventoryTransaction::ActionType for which it is.
       4: item_release
    # The list of inventory internal actions in this packet, e.g. inventory GUI actions
-   actions?: TransactionActions
+   actions: TransactionActions
    # Extra data if an intenal inventory transaction did not take place, e.g. use of an item 
    transaction_data: transaction_type?
       if normal or inventory_mismatch: void
@@ -692,6 +703,9 @@ Transaction:
          # HotBarSlot is the hot bar slot that the player was holding while clicking the entity. It should be used
          # to ensure that the hot bar slot and held item are correctly synchronised with the server.
          hotbar_slot: zigzag32
+         hand: u8 =>
+            0: main_hand
+            1: off_hand
          # HeldItem is the item that was held to interact with the entity. The server should check if this item
          # is actually present in the HotBarSlot.
          held_item: ItemV4
@@ -721,6 +735,9 @@ Transaction:
          # HeadPosition is the position of the player's head at the time of releasing the item. This is used
          # mainly for purposes such as spawning eating particles at that position.
          head_pos: vec3f
+         hand: u8 =>
+            0: main_hand
+            1: off_hand
 
 ItemStacks: ItemV4[]varint
 
@@ -883,11 +900,11 @@ PersonaPieceType: li32 =>
    - capes
    - classic_skin
    - emote
+   - coco
    - unsupported
 
 Skin:
    skin_id: string
-   play_fab_id: string
    skin_resource_pack: string
    skin_data: SkinImage
    animations: []varint
@@ -942,6 +959,7 @@ PlayerRecord:
          entity_unique_id: zigzag64
          username: string
          xbox_user_id: string
+         play_fab_id: string
          platform_chat_id: string
          build_platform: li32
          skin_data: Skin
@@ -1135,6 +1153,7 @@ ItemStackRequest:
          # CraftLoomRecipeStackRequestAction is sent when a loom recipe is crafted. It simply contains the
          # pattern identifier to figure out what pattern is meant to be applied to the item.
          - craft_loom_request
+         - craft_reserved
          # CraftNonImplementedStackRequestAction is an action sent for inventory actions that aren't yet implemented
          # in the new system. These include, for example, anvils.
          - non_implemented  # anvils aren't fully implemented yet
@@ -1225,6 +1244,9 @@ ItemStackRequest:
             pattern: string
             # TimesCrafted is how many times the recipe was crafted.
             times_crafted: u8
+         if craft_reserved:
+            reserved_id: string
+            times_crafted: u8
          if non_implemented: void
          if results_deprecated:
             result_items: ItemStackRequestInstanceDescriptor[]varint
@@ -1265,7 +1287,6 @@ ItemStackResponses: []varint
    request_id: zigzag32
    # As of 1.26.40 the container list no longer depends on the status: it is preceded by a presence byte
    # (always written as true) and is then written as an optional.
-   containers_presence: bool
    # ContainerInfo holds information on the containers that had their contents changed as a result of the
    # request. Absent when there are no containers to report.
    containers?: []varint
@@ -1285,7 +1306,6 @@ ItemStackResponses: []varint
          count: u8
          # StackNetworkID is the network ID of the new stack at a specific slot. As of 1.26.40 it is preceded
          # by a presence byte (always written as true) and is then written as an optional.
-         item_stack_id_presence: bool
          item_stack_id?: zigzag32
          # CustomName is the custom name of the item stack. It is used in relation to text filtering.
          custom_name: string
@@ -1662,6 +1682,10 @@ ContainerSlotType: u8 =>
    - recipe_food
    - recipe_blocks
    - recipe_furnace_items
+   - reserved_container_a
+   - reserved_container_b
+   - reserved_container_c
+   - reserved_container_d
 
 SoundType: varint =>
    - ItemUseOn
@@ -2507,6 +2531,8 @@ CameraPresets:
       - camera_relative_strafe
       - player_relative
       - player_relative_strafe
+   apply_inherited_starting_rotation: bool
+   starting_rotation?: vec2f
 
 
 # CameraRotationOption represents a rotation keyframe option for spline instructions.
@@ -2565,6 +2591,7 @@ MemoryCategoryCounter:
       - actor_rendering
       - block_ticking_queues
       - biome_storage
+      - blobs
       - cereal
       - circuit_system
       - client
@@ -2612,13 +2639,28 @@ MemoryCategoryCounter:
       - material_variation_manager
       - molang
       - ore_ui
-      - persona
+      - ore_ui_client
+      - persona_pieces
+      - persona_animations
+      - persona_characters
+      - persona_skin_packs
+      - persona_repo
       - player
       - render_chunk
       - render_chunk_index_buffer
       - render_chunk_vertex_buffer
       - rendering
+      - rendering_bgfx_init
+      - rendering_bgfx_start_frame
+      - rendering_block_tessellator
+      - rendering_end_frame
+      - rendering_graphics_tasks_init
       - rendering_library
+      - rendering_polygon_operator_pool
+      - rendering_pbr_texture_data
+      - rendering_render_registry
+      - rendering_setup
+      - rendering_vertices
       - request_log
       - resource_packs
       - sound
@@ -2626,11 +2668,11 @@ MemoryCategoryCounter:
       - sub_chunk_block_data
       - sub_chunk_light_data
       - textures
-      - vr
       - weather_renderer
       - world_generator
       - tasks
       - test
+      - test_load_test_tags
       - scripting
       - scripting_runtime
       - scripting_context
@@ -2650,6 +2692,9 @@ MemoryCategoryCounter:
       - gameface_media
       - gameface_json
       - gameface_script_engine
+      - gameface_script
+      - gameface_layout
+      - executable
    bytes: lu64
 
 VoxelCells:
@@ -2845,6 +2890,9 @@ DisconnectFailReason: zigzag32 =>
    - host_accepts_no_type_of_auth
    - not_authenticated_fast_fail
    - editor_not_allowed
+   - missing_structure_data
+   - unsupported_transport
+   - sub_client_login_not_bound
 
 FullContainerName:
    container_id: ContainerSlotType
@@ -3164,7 +3212,7 @@ BiomeReplacementData:
    # ReplacementIndex is the index of the replacement.
    replacement_index: lu32
 
-EaseType: u8 =>
+EaseType: varint =>
    - Linear
    - Spring
    - InQuad
@@ -3385,18 +3433,36 @@ AttributeData:
 
 EnvironmentAttributeData:
    attribute_name: string
-   from_attribute?: AttributeData
-   attribute: AttributeData
-   to_attribute?: AttributeData
-   current_transition_ticks: lu32
-   total_transition_ticks: lu32
-   ease_type: li32
-   local_transition_ticks: lu32
-   noise_transition: bool
+   payload_type: varint =>
+      0: constant
+      1: transition
+      2: noise_transition
+   _: payload_type ?
+      if constant:
+         attribute: AttributeData
+      if transition:
+         from_attribute: AttributeData
+         to_attribute: AttributeData
+         total_transition_ticks: varint
+         current_transition_ticks: varint
+         ease_type: EaseType
+         clock_name: string
+      if noise_transition:
+         from_attribute: AttributeData
+         to_attribute: AttributeData
+         total_transition_ticks: varint
+         current_transition_ticks: varint
+         ease_type: EaseType
+         clock_name: string
+         local_transition_ticks: varint
+         noise_name: string
+         noise_alignment:
+            type: u8 =>
+               0: min_local_transition_end
+            value: varint
 
 AttributeLayerData:
    name: string
-   noise_name?: string
    dimension_id: zigzag32
    settings: AttributeLayerSettings
    environment_attributes: EnvironmentAttributeData[]varint
@@ -3406,6 +3472,8 @@ EntityDiagnosticTimingInfo:
    entity: string
    duration_nanos: lu64
    percent_of_total: u8
+   position?: vec3f
+   dimension?: string
 
 SystemDiagnosticTimingInfo:
    display_name: string
@@ -3479,3 +3547,12 @@ ShapeArrow:
 PartyInfo:
    party_id: string
    party_leader: bool
+
+# Added in 1.26.50: sub chunk height maps are sent as 16 rows of 16 heights, each row length-prefixed.
+HeightMap: '["array", { "count": 16, "type": ["array", { "countType": "varint", "type": "i8" }] }]'
+
+# Added in 1.26.50: the options a player selected in a furnace-like container UI.
+FurnaceOptions:
+   left_furnace_tab: zigzag32
+   filtering: bool
+   layout: zigzag32

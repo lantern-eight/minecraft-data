@@ -1,7 +1,7 @@
 {
   "title": "blocks",
   "type": "array",
-  "uniqueItems": true,
+  "uniqueItemProperties": ["id"],
   "items": {
     "title": "block",
     "type": "object",
@@ -139,8 +139,8 @@
                       "type": "object",
                         "properties": {
                           "id": {
-                            "type": "integer",
-                            "minimum": 0
+                            "description": "The dropped item's id (Bedrock edition also uses negative ids)",
+                            "type": "integer"
                           },
                           "metadata": {
                             "type": "integer",
